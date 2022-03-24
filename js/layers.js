@@ -5,7 +5,6 @@ addLayer("r", {
     startData() { return {
         unlocked: true,
 		points: new Decimal(0),
-		goNormal: false,
     }},
     color: "#444444",
     requires: new Decimal(10), // Can be a function that takes requirement increases into account
@@ -14,7 +13,7 @@ addLayer("r", {
     baseAmount() {return player.points}, // Get the current amount of baseResource
     type: "custom", // normal: cost to gain currency depends on amount gained. static: cost depends on how much you already have
 	getResetGain () {
-		if (player[this.layer].goNormal) {
+		if (hasUpgrade('r',12)) {
 			if (tmp[this.layer].baseAmount.lt(tmp[this.layer].requires)) {
 				return decimalZero
 			}
@@ -34,7 +33,7 @@ addLayer("r", {
 		}
 	},
 	getNextAt (canMax=false) {
-		if (player[this.layer].goNormal) {
+		if (hasUpgrade('r',12)) {
 			let next = tmp[this.layer].resetGain.add(1);
 			next = next.div(tmp[this.layer].directMult);
 			if (next.gte(tmp[this.layer].softcap)) next = next.div(tmp[this.layer].softcap.pow(decimalOne.sub(tmp[this.layer].softcapPower))).pow(decimalOne.div(tmp[this.layer].softcapPower))
@@ -54,6 +53,7 @@ addLayer("r", {
 	canBuyMax() { return this.goNormal; },
     gainMult() { // Calculate the multiplier for main currency from bonuses
         mult = new Decimal(1)
+		if (hasUpgrade('r', 14)) mult = mult.times(upgradeEffect('r', 14))
         return mult
     },
     gainExp() { // Calculate the exponent on main currency from bonuses
@@ -65,14 +65,14 @@ addLayer("r", {
     ],
     layerShown(){return true},
 	prestigeButtonText() {
-		if (player[this.layer].goNormal) {
+		if (hasUpgrade('r',12)) {
 			return `${player[this.layer].points.lt(1e3) ? (tmp[this.layer].resetDescription !== undefined ? tmp[this.layer].resetDescription : "Reset for ") : ""}+<b>${formatWhole(tmp[this.layer].resetGain)}</b> ${tmp[this.layer].resource} ${tmp[this.layer].resetGain.lt(100) && player[this.layer].points.lt(1e3) ? `<br><br>Next at ${(tmp[this.layer].roundUpCost ? formatWhole(tmp[this.layer].nextAt) : format(tmp[this.layer].nextAt))} ${tmp[this.layer].baseResource}` : ""}`
 		} else {
 			return `${tmp[this.layer].resetDescription !== undefined ? tmp[this.layer].resetDescription : "Reset for "}+<b>${formatWhole(tmp[this.layer].resetGain)}</b> ${tmp[this.layer].resource}<br><br>${player[this.layer].points.lt(30) ? (tmp[this.layer].baseAmount.gte(tmp[this.layer].nextAt) && (tmp[this.layer].canBuyMax !== undefined) && tmp[this.layer].canBuyMax ? "Next:" : "Req:") : ""} ${formatWhole(tmp[this.layer].baseAmount)} / ${(tmp[this.layer].roundUpCost ? formatWhole(tmp[this.layer].nextAtDisp) : format(tmp[this.layer].nextAtDisp))} ${tmp[this.layer].baseResource}`
 		}
 	},
 	canReset() {
-		if (player[this.layer].goNormal) {
+		if (hasUpgrade('r',12)) {
 			return tmp[this.layer].baseAmount.gte(tmp[this.layer].requires);
 			
 		} else {
@@ -89,9 +89,6 @@ addLayer("r", {
 			title: "Reality Anchoring",
 			description: "Reality becomes far easier to gain.",
 			cost: new Decimal(5),
-			onPurchase() {
-				player[this.layer].goNormal = true;
-			},
 		},
 		13: {
 			title: "Possibilities of Creation",
@@ -101,6 +98,15 @@ addLayer("r", {
 			},
 			effectDisplay() { return format(upgradeEffect(this.layer, this.id))+"x" },
 			cost: new Decimal(10),
+		},
+		14: {
+			title: "Inspired Reality",
+			description: "Swirling possibilities boost reality growth.",
+			effect() {
+				return player.points.add(1).pow(0.1)
+			},
+			effectDisplay() { return format(upgradeEffect(this.layer, this.id))+"x" },
+			cost: new Decimal(100),
 		},
 	},
 	

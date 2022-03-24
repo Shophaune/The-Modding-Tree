@@ -7,6 +7,7 @@ addLayer("r", {
 		points: new Decimal(0),
 		best: new Decimal(0),
 		total: new Decimal(0),
+		keptUpgrades: [],
     }},
     color: "#444444",
     requires: new Decimal(10), // Can be a function that takes requirement increases into account
@@ -52,11 +53,58 @@ addLayer("r", {
 			return cost;
 		}
 	},
+	doReset(layer, force=false) {
+		if(hasMilestone('s',1)) {
+			player[this.layer].keptUpgrades = [12];
+			
+		} else {
+			console.log('second choice in first if')
+			player[this.layer].keptUpgrades = []
+		}
+		if (layer == this.layer) {
+		let row = tmp[layer].row
+		console.log('row is '+row)
+		if (!force) {
+			if (tmp[layer].canReset === false) {
+				return
+			};
+			if (tmp[layer].baseAmount.lt(tmp[layer].requires)) {
+				return;
+			}
+			let gain = tmp[layer].resetGain
+			if (tmp[layer].type=="static") {
+				if (tmp[layer].baseAmount.lt(tmp[layer].nextAt)) return;
+				gain =(tmp[layer].canBuyMax ? gain : 1)
+			} 
+			if (layers[layer].onPrestige)
+				run(layers[layer].onPrestige, layers[layer], gain)
+			addPoints(layer, gain)
+			updateMilestones(layer)
+			updateAchievements(layer)
+			if (!player[layer].unlocked) {
+				player[layer].unlocked = true;
+				needCanvasUpdate = true;
+				if (tmp[layer].increaseUnlockOrder){
+					lrs = tmp[layer].increaseUnlockOrder
+					for (lr in lrs)
+						if (!player[lrs[lr]].unlocked) player[lrs[lr]].unlockOrder++
+				}
+			}
+		}
+		}
+		layerDataReset(this.layer)
+		player[this.layer].upgrades = player[this.layer].keptUpgrades
+		player[layer].resetTime = 0
+		updateTemp()
+		updateTemp()
+	},
     exponent: new Decimal(0.9), // Prestige currency exponent
 	canBuyMax() { return this.goNormal; },
     gainMult() { // Calculate the multiplier for main currency from bonuses
         mult = new Decimal(1)
 		if (hasUpgrade('r', 14)) mult = mult.times(upgradeEffect('r', 14))
+		if (hasMilestone('s',0) && hasUpgrade('r',12)) mult = mult.times(player[this.layer].points.add(1).ln().add(1))
+		if (hasMilestone('s',0) && !hasUpgrade('r',12)) mult = mult.div(player[this.layer].points.add(1).ln().add(1))
         return mult
     },
     gainExp() { // Calculate the exponent on main currency from bonuses
@@ -229,6 +277,18 @@ addLayer("s", {
         {key: "s", description: "S: Reset for space.", onPress(){if (canReset(this.layer)) doReset(this.layer)}},
     ],
     layerShown(){return player[this.layer].unlocked},
-	upgrades: {
+	milestones: {
+		0: {
+			requirementDescription: "1 litre of space",
+			effectDescription() {
+				return ("Reality grows faster the more space it has. Currently: "+player[this.layer].points.add(1).ln().add(1).toStringWithDecimalPlaces(2)+"x")
+			},
+			done() { return player[this.layer].best.gte(1) }
+		},
+		1: {
+			requirementDescription: "5 litres of space",
+			effectDescription: "Reality is always much easier to gain.",
+			done() { return player[this.layer].best.gte(5) }
+		}
 	},
 })

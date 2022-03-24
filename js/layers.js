@@ -1,18 +1,57 @@
-addLayer("p", {
-    name: "prestige", // This is optional, only used in a few places, If absent it just uses the layer id.
-    symbol: "P", // This appears on the layer's node. Default is the id with the first letter capitalized
+addLayer("r", {
+    name: "reality", // This is optional, only used in a few places, If absent it just uses the layer id.
+    symbol: "R", // This appears on the layer's node. Default is the id with the first letter capitalized
     position: 0, // Horizontal position within a row. By default it uses the layer id and sorts in alphabetical order
     startData() { return {
         unlocked: true,
 		points: new Decimal(0),
+		goNormal: false,
     }},
-    color: "#4BDC13",
+    color: "#444444",
     requires: new Decimal(10), // Can be a function that takes requirement increases into account
-    resource: "prestige points", // Name of prestige currency
-    baseResource: "points", // Name of resource prestige is based on
+    resource: "scraps of reality", // Name of prestige currency
+    baseResource: "possibilities", // Name of resource prestige is based on
     baseAmount() {return player.points}, // Get the current amount of baseResource
-    type: "normal", // normal: cost to gain currency depends on amount gained. static: cost depends on how much you already have
-    exponent: 0.5, // Prestige currency exponent
+    type: "custom", // normal: cost to gain currency depends on amount gained. static: cost depends on how much you already have
+	getResetGain () {
+		if (player[this.layer].goNormal) {
+			if (tmp[this.layer].baseAmount.lt(tmp[this.layer].requires)) {
+				return decimalZero
+			}
+			let gain = tmp[this.layer].baseAmount.div(tmp[this.layer].requires).pow(tmp[this.layer].exponent).times(tmp[this.layer].gainMult).pow(tmp[this.layer].gainExp);
+			if (gain.gte(tmp[this.layer].softcap)) {
+				gain = gain.pow(tmp[this.layer].softcapPower).times(tmp[this.layer].softcap.pow(decimalOne.sub(tmp[this.layer].softcapPower)))
+			}
+			gain = gain.times(tmp[this.layer].directMult)
+			return gain.floor().max(0);
+		} else {
+			if ((!tmp[this.layer].canBuyMax) || tmp[this.layer].baseAmount.lt(tmp[this.layer].requires)) {
+				return decimalOne
+			}
+			let gain = tmp[this.layer].baseAmount.div(tmp[this.layer].requires).div(tmp[this.layer].gainMult).max(1).log(tmp[this.layer].base).times(tmp[this.layer].gainExp).pow(Decimal.pow(tmp[this.layer].exponent, -1))
+			gain = gain.times(tmp[this.layer].directMult)
+			return gain.floor().sub(player[this.layer].points).add(1).max(1);
+		}
+	},
+	getNextAt (canMax=false) {
+		if (player[this.layer].goNormal) {
+			let next = tmp[this.layer].resetGain.add(1);
+			next = next.div(tmp[this.layer].directMult);
+			if (next.gte(tmp[this.layer].softcap)) next = next.div(tmp[this.layer].softcap.pow(decimalOne.sub(tmp[this.layer].softcapPower))).pow(decimalOne.div(tmp[this.layer].softcapPower))
+			next = next.root(tmp[this.layer].gainExp).div(tmp[this.layer].gainMult).root(tmp[this.layer].exponent).times(tmp[this.layer].requires).max(tmp[this.layer].requires)
+			if (tmp[this.layer].roundUpCost) next = next.ceil()
+			return next;
+		} else {
+			if (!tmp[this.layer].canBuyMax) canMax = false
+			let amt = player[this.layer].points.plus((canMax&&tmp[this.layer].baseAmount.gte(tmp[this.layer].nextAt))?tmp[this.layer].resetGain:0).div(tmp[this.layer].directMult)
+			let extraCost = Decimal.pow(tmp[this.layer].base, amt.pow(tmp[this.layer].exponent).div(tmp[this.layer].gainExp)).times(tmp[this.layer].gainMult)
+			let cost = extraCost.times(tmp[this.layer].requires).max(tmp[this.layer].requires)
+			if (tmp[this.layer].roundUpCost) cost = cost.ceil()
+			return cost;
+		}
+	},
+    exponent: new Decimal(0.9), // Prestige currency exponent
+	canBuyMax() { return this.goNormal; },
     gainMult() { // Calculate the multiplier for main currency from bonuses
         mult = new Decimal(1)
         return mult
@@ -22,7 +61,47 @@ addLayer("p", {
     },
     row: 0, // Row the layer is in on the tree (0 is the first row)
     hotkeys: [
-        {key: "p", description: "P: Reset for prestige points", onPress(){if (canReset(this.layer)) doReset(this.layer)}},
+        {key: "R", description: "R: Reset for scraps of reality", onPress(){if (canReset(this.layer)) doReset(this.layer)}},
     ],
-    layerShown(){return true}
+    layerShown(){return true},
+	prestigeButtonText() {
+		if (player[this.layer].goNormal) {
+			return `${player[this.layer].points.lt(1e3) ? (tmp[this.layer].resetDescription !== undefined ? tmp[this.layer].resetDescription : "Reset for ") : ""}+<b>${formatWhole(tmp[this.layer].resetGain)}</b> ${tmp[this.layer].resource} ${tmp[this.layer].resetGain.lt(100) && player[this.layer].points.lt(1e3) ? `<br><br>Next at ${(tmp[this.layer].roundUpCost ? formatWhole(tmp[this.layer].nextAt) : format(tmp[this.layer].nextAt))} ${tmp[this.layer].baseResource}` : ""}`
+		} else {
+			return `${tmp[this.layer].resetDescription !== undefined ? tmp[this.layer].resetDescription : "Reset for "}+<b>${formatWhole(tmp[this.layer].resetGain)}</b> ${tmp[this.layer].resource}<br><br>${player[this.layer].points.lt(30) ? (tmp[this.layer].baseAmount.gte(tmp[this.layer].nextAt) && (tmp[this.layer].canBuyMax !== undefined) && tmp[this.layer].canBuyMax ? "Next:" : "Req:") : ""} ${formatWhole(tmp[this.layer].baseAmount)} / ${(tmp[this.layer].roundUpCost ? formatWhole(tmp[this.layer].nextAtDisp) : format(tmp[this.layer].nextAtDisp))} ${tmp[this.layer].baseResource}`
+		}
+	},
+	canReset() {
+		if (player[this.layer].goNormal) {
+			return tmp[this.layer].baseAmount.gte(tmp[this.layer].requires);
+			
+		} else {
+			return tmp[this.layer].baseAmount.gte(tmp[this.layer].nextAt);
+		}
+	},
+	upgrades: {
+		11: {
+			title: "Reality Blossoming",
+			description: "Doubles your possibilities.",
+			cost: new Decimal(3),
+		},
+		12: {
+			title: "Reality Anchoring",
+			description: "Reality becomes far easier to gain.",
+			cost: new Decimal(5),
+			onPurchase() {
+				player[this.layer].goNormal = true;
+			},
+		},
+		13: {
+			title: "Possibilities of Creation",
+			description: "Scraps of Reality boost possibility gain.",
+			effect() {
+				return player[this.layer].points.add(1).pow(0.75)
+			},
+			effectDisplay() { return format(upgradeEffect(this.layer, this.id))+"x" },
+			cost: new Decimal(10),
+		},
+	},
+	
 })

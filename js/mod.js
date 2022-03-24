@@ -13,11 +13,14 @@ let modInfo = {
 
 // Set your version in num and name
 let VERSION = {
-	num: "0.1",
+	num: "0.1.5",
 	name: "Beginnngs of Reality",
 }
 
 let changelog = `<h1>Changelog:</h1><br>
+	<h3>v0.1.5</h3><br>
+		- Added Energy
+		- Added upgrades to space and time.
 	<h3>v0.1</h3><br>
 		- Added Reality, Space and Time.<br>
 		- Added the best toy.`

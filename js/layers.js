@@ -20,10 +20,14 @@ addLayer("r", {
 			if (tmp[this.layer].baseAmount.lt(tmp[this.layer].requires)) {
 				return decimalZero
 			}
-			let gain = tmp[this.layer].baseAmount.div(tmp[this.layer].requires).pow(tmp[this.layer].exponent).times(tmp[this.layer].gainMult).pow(tmp[this.layer].gainExp);
+			let gain = tmp[this.layer].baseAmount.div(tmp[this.layer].requires);
+			gain = gain.pow(tmp[this.layer].exponent)
+			gain = gain.times(tmp[this.layer].gainMult)
+			gain = gain.pow(tmp[this.layer].gainExp)
 			if (gain.gte(tmp[this.layer].softcap)) {
 				gain = gain.pow(tmp[this.layer].softcapPower).times(tmp[this.layer].softcap.pow(decimalOne.sub(tmp[this.layer].softcapPower)))
 			}
+
 			gain = gain.times(tmp[this.layer].directMult)
 			return gain.floor().max(0);
 		} else {
@@ -54,16 +58,15 @@ addLayer("r", {
 		}
 	},
 	doReset(layer, force=false) {
+		
 		if(hasMilestone('s',1)) {
 			player[this.layer].keptUpgrades = [12];
 			
 		} else {
-			console.log('second choice in first if')
 			player[this.layer].keptUpgrades = []
 		}
 		if (layer == this.layer) {
 		let row = tmp[layer].row
-		console.log('row is '+row)
 		if (!force) {
 			if (tmp[layer].canReset === false) {
 				return
@@ -102,9 +105,17 @@ addLayer("r", {
 	canBuyMax() { return this.goNormal; },
     gainMult() { // Calculate the multiplier for main currency from bonuses
         mult = new Decimal(1)
+		//console.log(mult+" start");
+		//console.log(player[this.layer].points+" start points")
 		if (hasUpgrade('r', 14)) mult = mult.times(upgradeEffect('r', 14))
-		if (hasMilestone('s',0) && hasUpgrade('r',12)) mult = mult.times(player[this.layer].points.add(1).ln().add(1))
-		if (hasMilestone('s',0) && !hasUpgrade('r',12)) mult = mult.div(player[this.layer].points.add(1).ln().add(1))
+		//console.log(mult+" R14");
+		if (hasUpgrade('t', 11)) mult = mult.times(upgradeEffect('t', 11))
+		//console.log(mult+" T11");
+		if (hasMilestone('s',0)) mult = mult.times(player['s'].points.add(1).ln().add(1))
+		if (hasUpgrade('s', 13)) mult = mult.times(upgradeEffect('s', 13))
+		if (!hasUpgrade('r',12)) {
+			mult = mult.recip();
+		}
         return mult
     },
     gainExp() { // Calculate the exponent on main currency from bonuses
@@ -154,7 +165,10 @@ addLayer("r", {
 			title: "Inspired Reality",
 			description: "Swirling possibilities boost reality growth.",
 			effect() {
+				if(hasUpgrade('r',22)){return player.points.add(1).pow(0.1).times(upgradeEffect('r',22))}
+				else {
 				return player.points.add(1).pow(0.1)
+				}
 			},
 			effectDisplay() { return format(upgradeEffect(this.layer, this.id))+"x" },
 			cost: new Decimal(100),
@@ -171,6 +185,23 @@ addLayer("r", {
 				player['s'].unlocked = true;
 			},
 		},
+		22: {
+			title: "Spark of Creation",
+			description: "Improves Inspired Reality. Used to unlock the next layer.",
+			cost: new Decimal(6e66),
+			unlocked() {
+				return player[this.layer].best.gte(1e50);
+			},
+			effect() {
+				return player['s'].points.times(player['t'].points).add(1).ln().add(1).ln().add(1).ln().add(1)
+			},
+			effectDisplay() { return format(upgradeEffect(this.layer, this.id))+"x" },
+			onPurchase() {
+				if(hasUpgrade('s',31) &&hasUpgrade('t',31)) {
+					player['e'].unlocked = true;
+				}
+			},
+		}
 	},
 	branches: ['t','s'],
 	autoPrestige() {
@@ -203,7 +234,7 @@ addLayer("t", {
 	},
     requires: new Decimal(2000), // Can be a function that takes requirement increases into account
 	canReset() {
-		return ((this.baseAmount().gte(this.requires)) && (hasUpgrade('r',21) || player[this.layer].points.gte(1)))
+		return ((this.baseAmount().gte(this.requires)) && (hasUpgrade('r',21) || player[this.layer].best.gte(1)))
 	},
     resource: "seconds of time", // Name of prestige currency
     baseResource: "scraps of reality", // Name of resource prestige is based on
@@ -212,6 +243,9 @@ addLayer("t", {
     exponent: new Decimal(0.5), // Prestige currency exponent
     gainMult() { // Calculate the multiplier for main currency from bonuses
         mult = new Decimal(1)
+		if (hasUpgrade('t',12)) mult = mult.times(upgradeEffect('t', 12));
+		if (hasUpgrade('t',13)) mult = mult.times(upgradeEffect('t', 13));
+		if (hasUpgrade('s',22)) mult = mult.times(upgradeEffect('s', 22));
         return mult
     },
     gainExp() { // Calculate the exponent on main currency from bonuses
@@ -223,12 +257,71 @@ addLayer("t", {
     ],
     layerShown(){return player[this.layer].unlocked},
 	upgrades: {
+		11: {
+			title: "Tick.",
+			description: "First Time Milestone applies to reality gain at a reduced power.",
+			cost: new Decimal(3),
+			effect() {
+				return player[this.layer].points.add(1).pow(0.25);
+			},
+			effectDisplay() { return format(upgradeEffect(this.layer, this.id))+"x" },
+		},
+		12: {
+			title: "Tock.",
+			description: "Possibilities boost time gain.",
+			cost: new Decimal(500),
+			effect() {
+				return player.points.ln().add(1).pow(0.25);
+			},
+			effectDisplay() { return format(upgradeEffect(this.layer, this.id))+"x" },
+		},
+		13: {
+			title: "Sound the Clock",
+			description: "Time boosts its own gain.",
+			cost: new Decimal(1e10),
+			effect() {
+				if (hasUpgrade('t', 21)) {
+					return player[this.layer].points.add(1).ln().add(1).times(player['r'].points.ln()).ln().times(0.25).add(1);
+				} else {
+					return player[this.layer].points.add(1).ln().add(1).ln().times(0.25).add(1);
+				}
+			},
+			effectDisplay() { return format(upgradeEffect(this.layer, this.id))+"x" },
+		},
+		21: {
+			title: "Invent the Present",
+			description: "Reality boosts the power of Sound the Clock",
+			cost: new Decimal(1e20),
+			effect() {
+				return player['r'].points.ln();
+			},
+			effectDisplay() { return format(upgradeEffect(this.layer, this.id))+"x" },
+		},
+		22: {
+			title: "Timespace Continuum",
+			description: "Time boosts space gain.",
+			cost: new Decimal(1e25),
+			effect() {
+				return player[this.layer].points.add(1).pow(0.25).ln().add(1);
+			},
+			effectDisplay() { return format(upgradeEffect(this.layer, this.id))+"x" },
+		},
+		31: {
+			title: "Measurement",
+			description: "Used to unlock the next layer.",
+			cost: new Decimal(1e40),
+			onPurchase() {
+				if(hasUpgrade('s',31) &&hasUpgrade('r',22)) {
+					player['e'].unlocked = true;
+				}
+			},
+		},
 	},
 	milestones: {
 		0: {
 			requirementDescription: "1 second of time",
 			effectDescription() {
-				return ("Possibilities occur to you faster the more time you have. Currently: "+player[this.layer].points.add(1).pow(0.5).toStringWithDecimalPlaces(2)+"x")
+				return ("Possibilities occur to you faster the more time you have. Currently: "+player[this.layer].points.add(1).ln().add(1).pow(2).toStringWithDecimalPlaces(2)+"x")
 			},
 			done() { return player[this.layer].best.gte(1) }
 		},
@@ -248,9 +341,10 @@ addLayer("s", {
 		points: new Decimal(0),
 		best: new Decimal(0),
 		total: new Decimal(0),
+		lastGain: new Decimal(0),
     }},
     color() {
-		if(player[this.layer].points.gte(1) || (getResetGain(this.layer).gte(1) && hasUpgrade('r',21))) {
+		if(player[this.layer].best.gte(1) || (getResetGain(this.layer).gte(1) && hasUpgrade('r',21))) {
 			return "#007700"
 		} else {
 			return "#CC9999"
@@ -258,7 +352,7 @@ addLayer("s", {
 	},
     requires: new Decimal(2000), // Can be a function that takes requirement increases into account
 	canReset() {
-		return ((this.baseAmount().gte(this.requires)) && (hasUpgrade('r',21) || player[this.layer].points.gte(1)))
+		return ((this.baseAmount().gte(this.requires)) && (hasUpgrade('r',21) || player[this.layer].best.gte(1)))
 	},
     resource: "litres of space", // Name of prestige currency
     baseResource: "scraps of reality", // Name of resource prestige is based on
@@ -267,6 +361,8 @@ addLayer("s", {
     exponent: new Decimal(0.5), // Prestige currency exponent
     gainMult() { // Calculate the multiplier for main currency from bonuses
         mult = new Decimal(1)
+		if (hasUpgrade('t',22)) mult = mult.times(upgradeEffect('t', 22));
+		if (hasUpgrade('s',12)) mult = mult.times(upgradeEffect('s', 12));
         return mult
     },
     gainExp() { // Calculate the exponent on main currency from bonuses
@@ -277,6 +373,21 @@ addLayer("s", {
         {key: "s", description: "S: Reset for space.", onPress(){if (canReset(this.layer)) doReset(this.layer)}},
     ],
     layerShown(){return player[this.layer].unlocked},
+	getResetGain () {
+		if (tmp[this.layer].baseAmount.lt(tmp[this.layer].requires)) {
+			return decimalZero
+		}
+		let gain = tmp[this.layer].baseAmount.div(tmp[this.layer].requires);
+		gain = gain.pow(tmp[this.layer].exponent)
+		gain = gain.times(tmp[this.layer].gainMult)
+		gain = gain.pow(tmp[this.layer].gainExp)
+		if (gain.gte(tmp[this.layer].softcap)) {
+			gain = gain.pow(tmp[this.layer].softcapPower).times(tmp[this.layer].softcap.pow(decimalOne.sub(tmp[this.layer].softcapPower)))
+		}
+		gain = gain.times(tmp[this.layer].directMult)
+		player[this.layer].lastGain = gain.floor().max(0);
+		return gain.floor().max(0);
+	},
 	milestones: {
 		0: {
 			requirementDescription: "1 litre of space",
@@ -290,5 +401,105 @@ addLayer("s", {
 			effectDescription: "Reality is always much easier to gain.",
 			done() { return player[this.layer].best.gte(5) }
 		}
+	},
+	upgrades: {
+		11: {
+			title: "Big.",
+			description: "First Space Milestone applies to possibility gain.",
+			cost: new Decimal(3),
+			effect() {
+				return player[this.layer].points.add(1).ln().add(1);
+			},
+			effectDisplay() { return format(upgradeEffect(this.layer, this.id))+"x" },
+		},
+		12: {
+			title: "Bigger.",
+			description: "Reality boosts space gain.",
+			cost: new Decimal(500),
+			effect() {
+				return player['r'].points.add(1).ln().add(1).pow(0.5);
+			},
+			effectDisplay() { return format(upgradeEffect(this.layer, this.id))+"x" },
+		},
+		13: {
+			title: "BIGGER!",
+			description: "Space gain boosts reality gain.",
+			cost: new Decimal(1e10),
+			effect() {
+				return player[this.layer].lastGain.pow(0.1).add(1).ln().add(1);
+			},
+			effectDisplay() { return format(upgradeEffect(this.layer, this.id))+"x" },
+		},
+		21: {
+			title: "Big Enough",
+			description: "Space boosts its own gain.",
+			cost: new Decimal(1e20),
+			effect() {
+				return player[this.layer].points.add(1).ln().add(1).ln().times(0.25).add(1);
+			},
+			effectDisplay() { return format(upgradeEffect(this.layer, this.id))+"x" },
+		},
+		22: {
+			title: "Spacetime Continuum",
+			description: "Space boosts time gain.",
+			cost: new Decimal(1e25),
+			effect() {
+				return player[this.layer].points.add(1).ln().pow(0.5).add(1);
+			},
+			effectDisplay() { return format(upgradeEffect(this.layer, this.id))+"x" },
+		},
+		31: {
+			title: "Displacement",
+			description: "Used to unlock the next layer.",
+			cost: new Decimal(1e40),
+			onPurchase() {
+				if(hasUpgrade('r',22) &&hasUpgrade('t',31)) {
+					player['e'].unlocked = true;
+				}
+			},
+		},
+	},
+})
+addLayer("e", {
+    name: "energy", // This is optional, only used in a few places, If absent it just uses the layer id.
+    symbol: "E", // This appears on the layer's node. Default is the id with the first letter capitalized
+    position: 1, // Horizontal position within a row. By default it uses the layer id and sorts in alphabetical order
+    startData() { return {
+        unlocked: false,
+		points: new Decimal(0),
+		best: new Decimal(0),
+		total: new Decimal(0),
+    }},
+    color() {
+		if(player[this.layer].best.gte(1) || (getResetGain(this.layer).gte(1) && player[this.layer].unlocked)) {
+			return "#777700"
+		} else {
+			return "#CC9999"
+		}
+	},
+    requires: new Decimal(2e60), // Can be a function that takes requirement increases into account
+	canReset() {
+		return ((this.baseAmount().gte(this.requires)) && (hasUpgrade('r',21) || player[this.layer].best.gte(1)))
+	},
+    resource: "microjoules of energy", // Name of prestige currency
+    baseResource: "scraps of reality", // Name of resource prestige is based on
+    baseAmount() {return player['r'].points}, // Get the current amount of baseResource
+    type: "normal", // normal: cost to gain currency depends on amount gained. static: cost depends on how much you already have
+    exponent: new Decimal(0.5), // Prestige currency exponent
+    gainMult() { // Calculate the multiplier for main currency from bonuses
+        mult = new Decimal(1)
+        return mult
+    },
+    gainExp() { // Calculate the exponent on main currency from bonuses
+        return new Decimal(1)
+    },
+    row: 2, // Row the layer is in on the tree (0 is the first row)
+    hotkeys: [
+        {key: "e", description: "E: Reset for energy.", onPress(){if (canReset(this.layer)) doReset(this.layer)}},
+    ],
+    layerShown(){return player[this.layer].unlocked},
+	milestones: {
+	},
+	upgrades: {
 	},
 })
